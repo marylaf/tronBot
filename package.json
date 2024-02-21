@@ -1,0 +1,16 @@
+{
+  "name": "tronbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./src/main.js",
+    "dev": "nodemon ./src/main.js"
+  },
+  "keywords": [
+    "telegram",
+    "trade"
+  ],
+  "author": "Mariia Lafutkina",
+  "license": "ISC"
+}
