@@ -1,12 +1,10 @@
 import { Telegraf, session } from "telegraf";
 import { config } from "dotenv";
 import { Postgres } from "@telegraf/session/pg";
-import {
-  inlineMenuArray,
-  inlineWalletArray,
-  inlineHistoryArray,
-} from "./constants.js";
-import { addNewWallet } from './db.js';
+import { inlineMenuArray } from "./constants.js";
+import { addNewWallet, checkWalletExists } from "./db.js";
+import { getUSDTBalance } from "./tron.js";
+import { handleWalletMenu, isValidWalletAddress } from "./wallets.js";
 
 config();
 
@@ -36,34 +34,11 @@ const handleStartMenu = (ctx) => {
   ctx.reply(startTextMessage, startCaptchaMessage);
 };
 
-// function for opening wallet's menu
-const handleWalletMenu = (ctx) => {
-  const startTextMessage = `Что будем делать с кошельками?`;
-  const startCaptchaMessage = {
-    reply_markup: {
-      inline_keyboard: inlineWalletArray,
-    },
-  };
-
-  ctx.reply(startTextMessage, startCaptchaMessage);
-};
-
-const handleHistoryMenu = (ctx) => {
-  const startTextMessage = `Сколько последних транзакций показывать?`;
-  const startCaptchaMessage = {
-    reply_markup: {
-      inline_keyboard: inlineHistoryArray,
-    },
-  };
-
-  ctx.reply(startTextMessage, startCaptchaMessage);
-};
-
 bot.start((ctx) => handleStartMenu(ctx));
 bot.command("menu", (ctx) => {
   ctx.session.awaitingWalletAddress = false;
   handleStartMenu(ctx);
-})
+});
 
 // command for menu array
 bot.on("callback_query", async (ctx) => {
@@ -102,33 +77,45 @@ bot.on("callback_query", async (ctx) => {
   }
 });
 
-function isValidWalletAddress(address) {
-  if (typeof address !== 'string') {
-    return false;
-  }
-  const re = /^T[a-zA-Z0-9]{33}$/;
-  return re.test(address);
-}
-
 bot.on("message", async (ctx) => {
+  const userId = ctx.update.message.from.id;
+  const username = ctx.update.message.from.username;
+
   if (ctx.session.awaitingWalletAddress) {
     const walletAddress = ctx.update.message.text;
-    const username = ctx.update.message.from.username;
-    const userId = ctx.update.message.from.id;
-
+    
     if (isValidWalletAddress(walletAddress)) {
-      try {
-        await addNewWallet( userId, username, walletAddress);
-        await ctx.reply("Адрес кошелька успешно добавлен :)");
+
+      const isWalletExists = await checkWalletExists(userId, username, walletAddress);
+
+      if (isWalletExists) {
+        await ctx.reply("Этот адрес кошелька уже добавлен для данного пользователя.");
+      } else {
+        const textBalanceMessage = await getUSDTBalance(walletAddress);
+        await ctx.reply(textBalanceMessage);
+
+        ctx.session.walletAddress = walletAddress;
         ctx.session.awaitingWalletAddress = false;
-      } catch (error) {
-        await ctx.reply(error.message);
+        ctx.session.awaitingWalletName = true;
+        await ctx.reply("Как назвать этот кошелек?");
       }
     } else {
-      await ctx.reply("Адрес не подходит, попробуйте еще раз");
+      await ctx.reply("Адрес не подходит, попробуйте еще раз.");
     }
+  } else if (ctx.session.awaitingWalletName) {
+    const walletName = ctx.update.message.text;
+    const walletAddress = ctx.session.walletAddress;
+
+    await addNewWallet(userId, username, walletAddress, walletName);
+
+    await ctx.reply("Адрес кошелька успешно добавлен :)");
+
+    ctx.session.awaitingWalletName = false;
+    delete ctx.session.walletAddress;
   } else {
-    await ctx.reply("Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖");
+    await ctx.reply(
+      "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
+    );
   }
 });
 
