@@ -16,7 +16,7 @@ export async function getUSDTBalance(walletAddress) {
     const contract = await tronWeb.contract().at(usdtContractAddress);
     const balance = await contract.balanceOf(walletAddress).call();
     const balanceInUSDT = (tronWeb.toBigNumber(balance).toNumber()/1000000).toFixed();
-    const textBalanceMessage = `Текущий баланс: ${balanceInUSDT} USDT`;
+    const textBalanceMessage = `Текущий баланс: *${balanceInUSDT}* USDT`;
     return textBalanceMessage;
   } catch (error) {
     console.error("Ошибка при получении баланса USDT:", error);

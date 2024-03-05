@@ -2,7 +2,7 @@ import { Telegraf, session } from "telegraf";
 import { config } from "dotenv";
 import { Postgres } from "@telegraf/session/pg";
 import { inlineMenuArray } from "./constants.js";
-import { addNewWallet, checkWalletExists } from "./db.js";
+import { addNewWallet, checkWalletExists, sendUserWallets } from "./db.js";
 import { getUSDTBalance } from "./tron.js";
 import { handleWalletMenu, isValidWalletAddress } from "./wallets.js";
 
@@ -45,6 +45,8 @@ bot.on("callback_query", async (ctx) => {
   try {
     const ctxData = ctx.update.callback_query.data;
     const textWalletsMessage = "Введите адрес вашего USDT кошелька 💸";
+    const textAllWalletsMessage =
+      "На данный момент в системе есть следующие кошельки:";
     switch (ctxData) {
       //inline keyboard menu
       case "wallets":
@@ -66,6 +68,8 @@ bot.on("callback_query", async (ctx) => {
         break;
 
       case "allWallets":
+        ctx.reply(textAllWalletsMessage);
+        sendUserWallets(ctx);
         break;
 
       case "return":
@@ -83,16 +87,21 @@ bot.on("message", async (ctx) => {
 
   if (ctx.session.awaitingWalletAddress) {
     const walletAddress = ctx.update.message.text;
-    
-    if (isValidWalletAddress(walletAddress)) {
 
-      const isWalletExists = await checkWalletExists(userId, username, walletAddress);
+    if (isValidWalletAddress(walletAddress)) {
+      const isWalletExists = await checkWalletExists(
+        userId,
+        username,
+        walletAddress
+      );
 
       if (isWalletExists) {
-        await ctx.reply("Этот адрес кошелька уже добавлен для данного пользователя.");
+        await ctx.reply(
+          "Этот адрес кошелька уже добавлен для данного пользователя."
+        );
       } else {
         const textBalanceMessage = await getUSDTBalance(walletAddress);
-        await ctx.reply(textBalanceMessage);
+        await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
 
         ctx.session.walletAddress = walletAddress;
         ctx.session.awaitingWalletAddress = false;
