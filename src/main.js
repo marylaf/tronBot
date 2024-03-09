@@ -2,7 +2,12 @@ import { Telegraf, session } from "telegraf";
 import { config } from "dotenv";
 import { Postgres } from "@telegraf/session/pg";
 import { inlineMenuArray } from "./constants.js";
-import { addNewWallet, checkWalletExists, sendUserWallets } from "./db.js";
+import {
+  addNewWallet,
+  checkWalletExists,
+  sendUserWallets,
+  deleteWallet,
+} from "./db.js";
 import { getUSDTBalance } from "./tron.js";
 import { handleWalletMenu, isValidWalletAddress } from "./wallets.js";
 
@@ -45,8 +50,19 @@ bot.on("callback_query", async (ctx) => {
   try {
     const ctxData = ctx.update.callback_query.data;
     const textWalletsMessage = "Введите адрес вашего USDT кошелька 💸";
-    const textAllWalletsMessage =
-      "На данный момент в системе есть следующие кошельки:";
+
+    const deleteMatch = ctxData.match(/^delete_(.+)$/);
+    if (deleteMatch) {
+      const walletId = deleteMatch[1];
+      try {
+        const walletAddress = await deleteWallet(walletId);
+        await ctx.reply(`Кошелек ${walletAddress} удален.`);
+      } catch (error) {
+        console.error(`Ошибка при удалении кошелька: ${error.message}`);
+      }
+      return;
+    }
+
     switch (ctxData) {
       //inline keyboard menu
       case "wallets":
@@ -68,7 +84,6 @@ bot.on("callback_query", async (ctx) => {
         break;
 
       case "allWallets":
-        ctx.reply(textAllWalletsMessage);
         sendUserWallets(ctx);
         break;
 

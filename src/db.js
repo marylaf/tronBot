@@ -86,46 +86,58 @@ export async function sendUserWallets(ctx) {
   const userId = ctx.update.callback_query.from.id;
   const wallets = await getUserWallets(userId);
 
-  for (const wallet of wallets) {
-    const balance = await getUSDTBalance(wallet.wallet_address);
-    const messageText =
-      `*${wallet.wallet_name}*\n\n` +
-      `Адрес - [${wallet.wallet_address}](https://tronscan.org/#/address/${wallet.wallet_address})\n\n` +
-      balance;
+  if (wallets.length === 0) {
+    await ctx.reply("На данный момент в системе нет кошельков.");
+  } else {
+    const textAllWalletsMessage =
+      "На данный момент в системе есть следующие кошельки:";
+    await ctx.reply(textAllWalletsMessage);
 
-    const buttons = {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "Редактировать", callback_data: `edit_${wallet.id}` }],
-          [{ text: "Удалить", callback_data: `delete_${wallet.id}` }],
-        ],
-      },
-    };
+    for (const wallet of wallets) {
+      const balance = await getUSDTBalance(wallet.wallet_address);
+      const messageText =
+        `*${wallet.wallet_name}*\n\n` +
+        `Адрес - [${wallet.wallet_address}](https://tronscan.org/#/address/${wallet.wallet_address})\n\n` +
+        balance;
 
-    await ctx.reply(messageText, {
-      reply_markup: buttons.reply_markup,
-      disable_web_page_preview: true,
-      parse_mode: "Markdown",
-    });
+      const buttons = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Редактировать", callback_data: `edit_${wallet.id}` }],
+            [{ text: "Удалить", callback_data: `delete_${wallet.id}` }],
+          ],
+        },
+      };
+
+      await ctx.reply(messageText, {
+        reply_markup: buttons.reply_markup,
+        disable_web_page_preview: true,
+        parse_mode: "Markdown",
+      });
+    }
   }
 }
 
-// export async function removeSubscription(chatId) {
-//   try {
-//     await client.query('DELETE FROM subscriptions WHERE "chatId" = $1', [
-//       chatId,
-//     ]);
-//   } catch (error) {
-//     console.log("Error removing subscription:", error);
-//   }
-// }
-
-// export async function getAllSubscriptions() {
-//   try {
-//     const res = await client.query("SELECT * FROM subscriptions");
-//     return res.rows;
-//   } catch (error) {
-//     console.log("Error fetching subscriptions:", error);
-//     return [];
-//   }
-// }
+export async function deleteWallet(walletId) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const selectQuery = "SELECT wallet_address FROM wallets WHERE id = $1";
+    const selectRes = await client.query(selectQuery, [walletId]);
+    if (selectRes.rows.length > 0) {
+      const walletAddress = selectRes.rows[0].wallet_address;
+      const deleteQuery = "DELETE FROM wallets WHERE id = $1";
+      await client.query(deleteQuery, [walletId]);
+      await client.query("COMMIT");
+      return walletAddress;
+    } else {
+      console.log(`Кошелек с номером ${walletAddress} не найден.`);
+      return null;
+    }
+  } catch (error) {
+    console.log("Ошибка при удалении кошелька:", error);
+    await client.query("ROLLBACK");
+  } finally {
+    client.release();
+  }
+}
