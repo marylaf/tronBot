@@ -141,3 +141,18 @@ export async function deleteWallet(walletId) {
     client.release();
   }
 }
+
+export async function editWalletName(walletId, newName) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const updateQuery = "UPDATE wallets SET wallet_name = $1 WHERE id = $2";
+    await client.query(updateQuery, [newName, walletId]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error; 
+  } finally {
+    client.release();
+  }
+}

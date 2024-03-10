@@ -7,6 +7,7 @@ import {
   checkWalletExists,
   sendUserWallets,
   deleteWallet,
+  editWalletName,
 } from "./db.js";
 import { getUSDTBalance } from "./tron.js";
 import { handleWalletMenu, isValidWalletAddress } from "./wallets.js";
@@ -60,6 +61,15 @@ bot.on("callback_query", async (ctx) => {
       } catch (error) {
         console.error(`Ошибка при удалении кошелька: ${error.message}`);
       }
+      return;
+    }
+
+    const editMatch = ctxData.match(/^edit_(.+)$/);
+    if (editMatch) {
+      const walletId = editMatch[1];
+      ctx.session.walletIdForEdit = walletId;
+      ctx.session.awaitingNewName = true;
+      await ctx.reply("Как переименовать этот кошелек?");
       return;
     }
 
@@ -136,6 +146,20 @@ bot.on("message", async (ctx) => {
 
     ctx.session.awaitingWalletName = false;
     delete ctx.session.walletAddress;
+  } else if (ctx.session.awaitingNewName) {
+    const newName = ctx.update.message.text;
+    const walletId = ctx.session.walletIdForEdit;
+    try {
+      await editWalletName(walletId, newName);
+      await ctx.reply(`Имя кошелька успешно изменено на: ${newName}`);
+    } catch (error) {
+      console.log(`Ошибка при редактировании имени кошелька: ${error.message}`);
+      await ctx.reply(
+        "Произошла ошибка при попытке изменить имя кошелька. Пожалуйста, попробуйте еще раз."
+      );
+    }
+    ctx.session.awaitingNewName = false;
+    delete ctx.session.walletIdForEdit;
   } else {
     await ctx.reply(
       "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
