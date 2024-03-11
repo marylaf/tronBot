@@ -8,8 +8,10 @@ import {
   sendUserWallets,
   deleteWallet,
   editWalletName,
+  getWalletAddressById,
+  getWalletNameById,
 } from "./db.js";
-import { getUSDTBalance } from "./tron.js";
+import { getUSDTBalance, fetchAndFormatTransactions } from "./tron.js";
 import { handleWalletMenu, isValidWalletAddress } from "./wallets.js";
 
 config();
@@ -73,6 +75,21 @@ bot.on("callback_query", async (ctx) => {
       return;
     }
 
+    const showMatch = ctxData.match(/^show_(.+)$/);
+    if (showMatch) {
+      const walletId = showMatch[1];
+      try {
+        const walletAddress = await getWalletAddressById(walletId);
+        const walletName = await getWalletNameById(walletId);
+        const transactions = await fetchAndFormatTransactions(walletAddress, walletName);
+
+        await ctx.reply(transactions, { parse_mode: "Markdown" });
+      } catch (error) {
+        console.error(`Ошибка при показе всех транзакций: ${error.message}`);
+      }
+      return;
+    }
+
     switch (ctxData) {
       //inline keyboard menu
       case "wallets":
@@ -84,7 +101,7 @@ bot.on("callback_query", async (ctx) => {
         break;
 
       case "transactions":
-        console.log("Четыре");
+        sendUserWallets(ctx, "transaction");
         break;
 
       //inline keyboard wallets
@@ -94,7 +111,7 @@ bot.on("callback_query", async (ctx) => {
         break;
 
       case "allWallets":
-        sendUserWallets(ctx);
+        sendUserWallets(ctx, "wallet");
         break;
 
       case "return":

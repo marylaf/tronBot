@@ -1,6 +1,7 @@
 import pkg from "pg";
 import { config } from "dotenv";
 import { getUSDTBalance } from "./tron.js";
+import { Transaction } from "kysely";
 
 config();
 
@@ -82,7 +83,7 @@ export async function getUserWallets(userId) {
   }
 }
 
-export async function sendUserWallets(ctx) {
+export async function sendUserWallets(ctx, context) {
   const userId = ctx.update.callback_query.from.id;
   const wallets = await getUserWallets(userId);
 
@@ -100,14 +101,26 @@ export async function sendUserWallets(ctx) {
         `Адрес - [${wallet.wallet_address}](https://tronscan.org/#/address/${wallet.wallet_address})\n\n` +
         balance;
 
-      const buttons = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "Редактировать", callback_data: `edit_${wallet.id}` }],
-            [{ text: "Удалить", callback_data: `delete_${wallet.id}` }],
-          ],
-        },
-      };
+      let buttons;
+
+      if (context === 'transaction') {
+        buttons = {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "Показать", callback_data: `show_${wallet.id}` }],
+            ],
+          },
+        };
+      } else if (context === 'wallet') {
+        buttons = {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "Редактировать", callback_data: `edit_${wallet.id}` }],
+              [{ text: "Удалить", callback_data: `delete_${wallet.id}` }],
+            ],
+          },
+        };
+      }
 
       await ctx.reply(messageText, {
         reply_markup: buttons.reply_markup,
@@ -151,8 +164,49 @@ export async function editWalletName(walletId, newName) {
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
-    throw error; 
+    throw error;
   } finally {
     client.release();
   }
 }
+
+export async function getWalletAddressById(walletId) {
+  const client = await pool.connect();
+  try {
+    const query = "SELECT wallet_address FROM wallets WHERE id = $1";
+    const { rows } = await client.query(query, [walletId]);
+    if (rows.length > 0) {
+      const walletAddress = rows[0].wallet_address;
+      return walletAddress;
+    } else {
+      console.log("Кошелек не найден");
+      return null;
+    }
+  } catch (error) {
+    console.error("Ошибка при извлечении адреса кошелька:", error);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getWalletNameById(walletId) {
+  const client = await pool.connect();
+  try {
+    const query = "SELECT wallet_name FROM wallets WHERE id = $1";
+    const { rows } = await client.query(query, [walletId]);
+    if (rows.length > 0) {
+      const walletName = rows[0].wallet_name;
+      return walletName;
+    } else {
+      console.log("Имя не найдено");
+      return null;
+    }
+  } catch (error) {
+    console.error("Ошибка при извлечении имени кошелька:", error);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
