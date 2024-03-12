@@ -44,7 +44,8 @@ export async function fetchAndFormatTransactions(
       });
       const transactions = response.data.data || [];
       const usdtTransactions = transactions.filter(
-        (transaction) => transaction.token_info.symbol === "USDT"
+        (transaction) => transaction.token_info.symbol === "USDT" &&
+        parseInt(transaction.value, 10) / Math.pow(10, transaction.token_info.decimals) >= 1
       );
       for (let transaction of usdtTransactions) {
         if (allUsdtTransactions.length < filterValue) {
