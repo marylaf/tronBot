@@ -82,8 +82,10 @@ bot.on("callback_query", async (ctx) => {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
         const transactions = await fetchAndFormatTransactions(walletAddress, walletName);
+        const textBalanceMessage = await getUSDTBalance(walletAddress);
 
         await ctx.reply(transactions, { parse_mode: "Markdown" });
+        await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
       } catch (error) {
         console.error(`Ошибка при показе всех транзакций: ${error.message}`);
       }

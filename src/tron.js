@@ -28,20 +28,20 @@ export async function fetchAndFormatTransactions(walletAddress, walletName) {
   const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20`;
 
   try {
-    const balance = await getUSDTBalance(walletAddress);
     const response = await axios.get(url, {
-      params: { limit: 5 },
+      // params: { limit: 20 },
       headers: { accept: "application/json" },
     });
     const transactions = response.data.data || [];
+    const usdtTransactions = transactions.filter((transaction) => transaction.token_info.symbol === "USDT");
 
-    const messages = transactions.map((transaction) => {
+    const messages = usdtTransactions.map((transaction) => {
       const { transaction_id: txID, token_info, from, to, value } = transaction;
       const amount = parseInt(value, 10) / Math.pow(10, token_info.decimals);
 
       let message = `Кошелек: *${walletName}*\nНа Сумму: *${amount.toFixed(2)}* ${
         token_info.symbol
-      } 💵\n\nОт: \`\ ${from}\`\ \nКому: \`\ ${to}\`\ \n\nHASH: \`\ ${txID}\`\ \n\n${balance}`;
+      } 💵\n\nОт: \`\ ${from}\`\ \nКому: \`\ ${to}\`\ \n\nHASH: \`\ ${txID}\`\ `;
 
       const transactionDirection =
         from.toLowerCase() === walletAddress.toLowerCase()
