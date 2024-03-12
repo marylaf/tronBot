@@ -2,6 +2,7 @@ import { Telegraf, session } from "telegraf";
 import { config } from "dotenv";
 import { Postgres } from "@telegraf/session/pg";
 import { inlineMenuArray } from "./constants.js";
+import { handleHistoryMenu } from "./history.js";
 import {
   addNewWallet,
   checkWalletExists,
@@ -81,7 +82,12 @@ bot.on("callback_query", async (ctx) => {
       try {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
-        const transactions = await fetchAndFormatTransactions(walletAddress, walletName);
+        const filter = ctx.session.filter;
+        const transactions = await fetchAndFormatTransactions(
+          walletAddress,
+          walletName,
+          filter
+        );
         const textBalanceMessage = await getUSDTBalance(walletAddress);
 
         await ctx.reply(transactions, { parse_mode: "Markdown" });
@@ -118,6 +124,17 @@ bot.on("callback_query", async (ctx) => {
 
       case "return":
         handleStartMenu(ctx);
+        break;
+
+      //inline keyboard filter
+      case "12":
+      case "5":
+      case "10":
+        ctx.session.filter = ctxData;
+        ctx.reply(`Фильтр на *${ctxData}* транзакций установлен.`, {
+          parse_mode: "Markdown",
+        });
+        sendUserWallets(ctx, "transaction");
         break;
     }
   } catch (error) {
