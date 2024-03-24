@@ -19,3 +19,5 @@ export const inlineHistoryArray = [
 ];
 
 export const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+
+export const MAX_TRANSACTIONS_PER_MESSAGE = 12;

@@ -1,7 +1,7 @@
 import pkg from "pg";
 import { config } from "dotenv";
 import { getUSDTBalance } from "./tron.js";
-import { Transaction } from "kysely";
+import axios from "axios";
 
 config();
 
@@ -27,20 +27,41 @@ export async function addNewWallet(
   userId,
   username,
   walletAddress,
-  walletName
+  walletName,
+  ctx
 ) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=20`;
+    const response = await axios.get(url, {
+      headers: { accept: "application/json" },
+    });
+    const transactions = response.data.data || [];
+
+    const usdtTransactions = transactions.filter(
+      (transaction) => transaction.token_info.symbol === "USDT"
+    );
+
+    let lastKnownTransactionId = "0"; // Значение по умолчанию, если транзакции не найдены
+    if (usdtTransactions.length > 0) {
+      lastKnownTransactionId = usdtTransactions[0].transaction_id;
+    }
+
     const insertQuery =
-      "INSERT INTO wallets(user_id, username, wallet_address, wallet_name) VALUES($1, $2, $3, $4) RETURNING *";
+      "INSERT INTO wallets(user_id, username, wallet_address, wallet_name, last_known_transaction_id) VALUES($1, $2, $3, $4, $5) RETURNING *";
     const insertRes = await client.query(insertQuery, [
       userId,
       username,
       walletAddress,
       walletName,
+      lastKnownTransactionId,
     ]);
     await client.query("COMMIT");
+
+    await ctx.reply("Адрес кошелька успешно добавлен :)");
+
     return insertRes.rows[0];
   } catch (error) {
     console.log("Error checking wallet adding:", error);
@@ -103,7 +124,7 @@ export async function sendUserWallets(ctx, context) {
 
       let buttons;
 
-      if (context === 'transaction') {
+      if (context === "transaction") {
         buttons = {
           reply_markup: {
             inline_keyboard: [
@@ -111,7 +132,7 @@ export async function sendUserWallets(ctx, context) {
             ],
           },
         };
-      } else if (context === 'wallet') {
+      } else if (context === "wallet") {
         buttons = {
           reply_markup: {
             inline_keyboard: [
@@ -210,3 +231,23 @@ export async function getWalletNameById(walletId) {
   }
 }
 
+export async function getAllSubscriptions() {
+  const client = await pool.connect();
+
+  try {
+    const queryText =
+      "SELECT user_id, wallet_address, wallet_name, last_known_transaction_id FROM wallets";
+    const res = await client.query(queryText);
+    return res.rows.map((row) => ({
+      chatId: row.user_id,
+      walletAddress: row.wallet_address,
+      walletName: row.wallet_name,
+      lastKnownTransactionId: row.last_known_transaction_id,
+    }));
+  } catch (error) {
+    console.error("Ошибка при получении подписок:", error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}

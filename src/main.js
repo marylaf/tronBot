@@ -1,7 +1,7 @@
 import { Telegraf, session } from "telegraf";
 import { config } from "dotenv";
 import { Postgres } from "@telegraf/session/pg";
-import { inlineMenuArray } from "./constants.js";
+import { inlineMenuArray, MAX_TRANSACTIONS_PER_MESSAGE } from "./constants.js";
 import { handleHistoryMenu } from "./history.js";
 import {
   addNewWallet,
@@ -11,9 +11,15 @@ import {
   editWalletName,
   getWalletAddressById,
   getWalletNameById,
+  getAllSubscriptions,
 } from "./db.js";
-import { getUSDTBalance, fetchAndFormatTransactions } from "./tron.js";
-import { handleWalletMenu, isValidWalletAddress } from "./wallets.js";
+import {
+  getUSDTBalance,
+  formatTransactions,
+  fetchTransactions,
+  fetchNewTransactions,
+} from "./tron.js";
+import { handleWalletMenu, isValidWalletAddress, extractWalletAddressFromMessage} from "./wallets.js";
 
 config();
 
@@ -83,14 +89,14 @@ bot.on("callback_query", async (ctx) => {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
         const filter = ctx.session.filter;
-        const transactions = await fetchAndFormatTransactions(
-          walletAddress,
+        const transactions = await fetchTransactions(walletAddress, filter);
+        const formatMessage = formatTransactions(
+          transactions,
           walletName,
-          filter
+          walletAddress
         );
         const textBalanceMessage = await getUSDTBalance(walletAddress);
-
-        await ctx.reply(transactions, { parse_mode: "Markdown" });
+        await ctx.reply(formatMessage, { parse_mode: "Markdown" });
         await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
       } catch (error) {
         console.error(`Ошибка при показе всех транзакций: ${error.message}`);
@@ -147,42 +153,48 @@ bot.on("message", async (ctx) => {
   const username = ctx.update.message.from.username;
 
   if (ctx.session.awaitingWalletAddress) {
-    const walletAddress = ctx.update.message.text;
+    const walletAddress = extractWalletAddressFromMessage(ctx.update.message.text);
 
-    if (isValidWalletAddress(walletAddress)) {
-      const isWalletExists = await checkWalletExists(
-        userId,
-        username,
-        walletAddress
-      );
-
-      if (isWalletExists) {
-        await ctx.reply(
-          "Этот адрес кошелька уже добавлен для данного пользователя."
-        );
-      } else {
-        const textBalanceMessage = await getUSDTBalance(walletAddress);
-        await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
-
-        ctx.session.walletAddress = walletAddress;
-        ctx.session.awaitingWalletAddress = false;
-        ctx.session.awaitingWalletName = true;
-        await ctx.reply("Как назвать этот кошелек?");
-      }
-    } else {
+    if (!isValidWalletAddress(walletAddress)) {  
       await ctx.reply("Адрес не подходит, попробуйте еще раз.");
+      return;
     }
-  } else if (ctx.session.awaitingWalletName) {
+
+    const isWalletExists = await checkWalletExists(
+      userId,
+      username,
+      walletAddress
+    );
+
+    if (isWalletExists) {
+      await ctx.reply(
+        "Этот адрес кошелька уже добавлен для данного пользователя."
+      );
+      return;
+    }
+
+    const textBalanceMessage = await getUSDTBalance(walletAddress);
+    await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
+
+    ctx.session.walletAddress = walletAddress;
+    ctx.session.awaitingWalletAddress = false;
+    ctx.session.awaitingWalletName = true;
+    await ctx.reply("Как назвать этот кошелек?");
+    return;
+  } 
+
+  if (ctx.session.awaitingWalletName) {
     const walletName = ctx.update.message.text;
     const walletAddress = ctx.session.walletAddress;
 
-    await addNewWallet(userId, username, walletAddress, walletName);
-
-    await ctx.reply("Адрес кошелька успешно добавлен :)");
+    await addNewWallet(userId, username, walletAddress, walletName, ctx);
 
     ctx.session.awaitingWalletName = false;
     delete ctx.session.walletAddress;
-  } else if (ctx.session.awaitingNewName) {
+    return;
+  }
+
+  if (ctx.session.awaitingNewName) {
     const newName = ctx.update.message.text;
     const walletId = ctx.session.walletIdForEdit;
     try {
@@ -196,11 +208,64 @@ bot.on("message", async (ctx) => {
     }
     ctx.session.awaitingNewName = false;
     delete ctx.session.walletIdForEdit;
-  } else {
-    await ctx.reply(
-      "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
-    );
-  }
+    return;
+  } 
+
+  await ctx.reply(
+    "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
+  );
 });
+
+export async function sendMessageToAllUsers() {
+  const subscriptions = await getAllSubscriptions();
+  for (const subscription of subscriptions) {
+    try {
+      console.log("DO CRAWLING");
+      const walletAddress = subscription.walletAddress;
+      const lastKnownTransactionId = subscription.lastKnownTransactionId;
+      const newTransactions = await fetchNewTransactions(
+        walletAddress,
+        lastKnownTransactionId
+      );
+  
+      if (newTransactions.length > 0) {
+        for (
+          let i = 0;
+          i < newTransactions.length;
+          i += MAX_TRANSACTIONS_PER_MESSAGE
+        ) {
+          const transactionsChunk = newTransactions.slice(
+            i,
+            i + MAX_TRANSACTIONS_PER_MESSAGE
+          );
+          let message = formatTransactions(
+            transactionsChunk,
+            subscription.walletName,
+            subscription.walletAddress
+          );
+          await bot.telegram.sendMessage(subscription.chatId, message, {
+            parse_mode: "Markdown",
+          });
+        }
+      }
+    } catch (e) {
+      console.error(
+        `Ошибка при отправке сообщения пользователю с ID ${subscription.chatId}: ${e}`
+      );
+
+      if (e.code === 403) {
+        await removeSubscription(subscription.chatId);
+        console.log(
+          `Подписка для chatId: ${subscription.chatId} удалена из-за блокировки бота.`
+        );
+      }
+    }
+  }
+}
+
+sendMessageToAllUsers();
+setInterval(() => {
+  sendMessageToAllUsers();
+}, 30000);
 
 bot.launch();

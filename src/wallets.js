@@ -12,6 +12,15 @@ export const handleWalletMenu = (ctx) => {
     ctx.reply(startTextMessage, startCaptchaMessage);
   };
 
+export function extractWalletAddressFromMessage(message) {
+  const re = /^.*(T[a-zA-Z0-9]{33}).*$/;
+  try {
+    return message.match(re)[1];
+  } catch (e) {
+    return null;
+  }
+}
+
  export function isValidWalletAddress(address) {
     if (typeof address !== "string") {
       return false;
