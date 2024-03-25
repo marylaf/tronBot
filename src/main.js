@@ -12,6 +12,7 @@ import {
   getWalletAddressById,
   getWalletNameById,
   getAllSubscriptions,
+  removeSubscription,
 } from "./db.js";
 import {
   getUSDTBalance,
@@ -19,7 +20,11 @@ import {
   fetchTransactions,
   fetchNewTransactions,
 } from "./tron.js";
-import { handleWalletMenu, isValidWalletAddress, extractWalletAddressFromMessage} from "./wallets.js";
+import {
+  handleWalletMenu,
+  isValidWalletAddress,
+  extractWalletAddressFromMessage,
+} from "./wallets.js";
 
 config();
 
@@ -155,9 +160,11 @@ bot.on("message", async (ctx) => {
   const username = ctx.update.message.from.username;
 
   if (ctx.session.awaitingWalletAddress) {
-    const walletAddress = extractWalletAddressFromMessage(ctx.update.message.text);
+    const walletAddress = extractWalletAddressFromMessage(
+      ctx.update.message.text
+    );
 
-    if (!isValidWalletAddress(walletAddress)) {  
+    if (!isValidWalletAddress(walletAddress)) {
       await ctx.reply("Адрес не подходит, попробуйте еще раз.");
       return;
     }
@@ -183,7 +190,7 @@ bot.on("message", async (ctx) => {
     ctx.session.awaitingWalletName = true;
     await ctx.reply("Как назвать этот кошелек?");
     return;
-  } 
+  }
 
   if (ctx.session.awaitingWalletName) {
     const walletName = ctx.update.message.text;
@@ -211,7 +218,7 @@ bot.on("message", async (ctx) => {
     ctx.session.awaitingNewName = false;
     delete ctx.session.walletIdForEdit;
     return;
-  } 
+  }
 
   await ctx.reply(
     "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
@@ -229,7 +236,7 @@ export async function sendMessageToAllUsers() {
         walletAddress,
         lastKnownTransactionId
       );
-  
+
       if (newTransactions.length > 0) {
         for (
           let i = 0;

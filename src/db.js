@@ -251,3 +251,13 @@ export async function getAllSubscriptions() {
     client.release();
   }
 }
+
+export async function removeSubscription(chatId) {
+  try {
+    await client.query('DELETE FROM wallets WHERE "user_id" = $1', [
+      chatId,
+    ]);
+  } catch (error) {
+    console.log("Error removing subscription:", error);
+  }
+}
