@@ -52,6 +52,8 @@ const handleStartMenu = (ctx) => {
 bot.start((ctx) => handleStartMenu(ctx));
 bot.command("menu", (ctx) => {
   ctx.session.awaitingWalletAddress = false;
+  ctx.session.awaitingWalletName = false;
+  ctx.session.awaitingNewName = false;
   handleStartMenu(ctx);
 });
 
