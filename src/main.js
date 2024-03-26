@@ -229,7 +229,7 @@ export async function sendMessageToAllUsers() {
   const subscriptions = await getAllSubscriptions();
   for (const subscription of subscriptions) {
     try {
-      console.log("DO CRAWLING");
+      console.log("DO TRANS");
       const walletAddress = subscription.walletAddress;
       const lastKnownTransactionId = subscription.lastKnownTransactionId;
       const newTransactions = await fetchNewTransactions(
