@@ -15,7 +15,7 @@ export const inlineWalletArray = [
 export const inlineHistoryArray = [
   [{ text: "5 шт", callback_data: "5" }],
   [{ text: "10 шт", callback_data: "10" }],
-  [{ text: "12 шт", callback_data: "12" }],
+  [{ text: "20 шт", callback_data: "20" }],
 ];
 
 export const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
