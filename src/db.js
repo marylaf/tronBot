@@ -253,6 +253,7 @@ export async function getAllSubscriptions() {
 }
 
 export async function removeSubscription(chatId) {
+  const client = await pool.connect();
   try {
     await client.query('DELETE FROM wallets WHERE "user_id" = $1', [
       chatId,
