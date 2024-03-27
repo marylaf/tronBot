@@ -19,7 +19,7 @@ export const inlineHistoryArray = [
 ];
 
 export const inlineTransArray = [
-  [{ text: "Да", callback_data: "show_more" }],
+  [{ text: "Да", callback_data: "more" }],
 ];
 
 export const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";

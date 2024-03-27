@@ -20,9 +20,11 @@ export const handleHistoryMenu = (ctx) => {
   ctx.reply(startTextMessage, startCaptchaMessage);
 };
 
-export async function showTransactions(walletAddress, walletName, ctx, filter) {
-  // const { offset, filterValue } = ctx.session.pagination;
-  const transactions = await fetchTransactions(walletAddress, filter);
+export async function showTransactions(walletAddress, walletName, ctx) {
+  const filter = ctx.session.filter || 5;
+  const fingerprint = ctx.session.pagination?.fingerprint;
+  console.log(fingerprint, 'ГДЕ ПЕРЕДАЕТСЯ');
+  const { transactions, nextFingerprint } = await fetchTransactions(walletAddress, filter, fingerprint);
 
   if (transactions.length <= 0) {
     await ctx.reply("Больше транзакций нет.");
@@ -54,13 +56,18 @@ export async function showTransactions(walletAddress, walletName, ctx, filter) {
     );
     await ctx.reply(formatMessage, { parse_mode: "Markdown" });
   }
+
+  ctx.session.pagination = { fingerprint: nextFingerprint };
+
+  ctx.session.walletAddress = walletAddress;
+  ctx.session.walletName = walletName;
+
+    await ctx.reply("Показать еще?", {
+      reply_markup: {
+        inline_keyboard: inlineTransArray,
+      },
+    });
+
   const textBalanceMessage = await getUSDTBalance(walletAddress);
   await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
-
-  // ctx.session.pagination.offset += transactions.length;
-  await ctx.reply("Показать еще?", {
-    reply_markup: {
-      inline_keyboard: inlineTransArray,
-    },
-  });
 }

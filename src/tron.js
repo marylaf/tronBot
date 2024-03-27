@@ -1,7 +1,7 @@
 import TronWeb from "tronweb";
 import { usdtContractAddress } from "./constants.js";
 import axios from "axios";
-import { pool } from './db.js'
+import { pool } from "./db.js";
 
 const tronWeb = new TronWeb({
   fullNode: "https://api.trongrid.io",
@@ -25,18 +25,27 @@ export async function getUSDTBalance(walletAddress) {
   }
 }
 
-export async function fetchTransactions(walletAddress, filterValue) {
+export async function fetchTransactions(
+  walletAddress,
+  filterValue,
+  fingerprint = null
+) {
   filterValue = parseInt(filterValue, 10);
   const limit = 200;
-  let offset = 0;
   const allUsdtTransactions = [];
 
   while (allUsdtTransactions.length < filterValue) {
     const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20`;
+    let params = { limit };
+
+    // Добавляем fingerprint в параметры запроса, если он уже известен
+    if (fingerprint) {
+      params.fingerprint = fingerprint;
+    }
 
     try {
       const response = await axios.get(url, {
-        params: { limit, start: offset },
+        params,
         headers: { accept: "application/json" },
       });
       const transactions = response.data.data || [];
@@ -47,6 +56,8 @@ export async function fetchTransactions(walletAddress, filterValue) {
             Math.pow(10, transaction.token_info.decimals) >=
             1
       );
+
+      // Добавляем транзакции до достижения filterValue
       for (let transaction of usdtTransactions) {
         if (allUsdtTransactions.length < filterValue) {
           allUsdtTransactions.push(transaction);
@@ -54,19 +65,25 @@ export async function fetchTransactions(walletAddress, filterValue) {
           break; // Прекращаем добавление, как только достигли filterValue
         }
       }
+
+      // Обновляем fingerprint для следующего запроса
+      fingerprint = response.data.meta?.fingerprint;
+
+      // Проверяем условие выхода: если получено транзакций меньше, чем limit, предполагаем, что это последняя страница
       if (
         transactions.length < limit ||
         allUsdtTransactions.length >= filterValue
       ) {
         break;
-      } else {
-        offset += limit;
       }
     } catch (error) {
       console.error(`Ошибка при получении транзакций: ${error}`);
+      break; // Прерываем цикл в случае ошибки
     }
   }
-  return allUsdtTransactions;
+
+  // Возвращаем накопленные транзакции и последний fingerprint для возможной последующей пагинации
+  return { transactions: allUsdtTransactions, nextFingerprint: fingerprint };
 }
 
 export async function fetchNewTransactions(

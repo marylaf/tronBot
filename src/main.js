@@ -12,7 +12,7 @@ import {
   getAllSubscriptions,
   removeSubscription,
   getWalletAddressById,
-  getWalletNameById
+  getWalletNameById,
 } from "./db.js";
 import {
   getUSDTBalance,
@@ -94,12 +94,10 @@ bot.on("callback_query", async (ctx) => {
       try {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
-        const filter = ctx.session.filter || 5;
         ctx.session.pagination = {
           offset: 0,
-          filterValue: filter,
         };
-        await showTransactions(walletAddress, walletName, ctx, filter);
+        await showTransactions(walletAddress, walletName, ctx);
       } catch (error) {
         console.error(`Ошибка при показе всех транзакций: ${error.message}`);
       }
@@ -136,10 +134,13 @@ bot.on("callback_query", async (ctx) => {
         ctx.session.awaitingNewName = false;
         break;
 
-      // case "show_more":
-      //   const walletAddress = ; 
-      //   await showTransactions(walletAddress, ctx);
-      //   break;
+      case "more":
+        const walletAddress = ctx.session.walletAddress;
+        const walletName = ctx.session.walletName;
+
+        await showTransactions(walletAddress, walletName, ctx);
+
+        break;
 
       case "return":
         handleStartMenu(ctx);
