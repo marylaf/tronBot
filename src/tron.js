@@ -25,7 +25,7 @@ export async function getUSDTBalance(walletAddress) {
   }
 }
 
-export async function fetchTransactions(walletAddress, filterValue = 5) {
+export async function fetchTransactions(walletAddress, filterValue) {
   filterValue = parseInt(filterValue, 10);
   const limit = 200;
   let offset = 0;

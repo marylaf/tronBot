@@ -2,22 +2,21 @@ import { Telegraf, session } from "telegraf";
 import { config } from "dotenv";
 import { Postgres } from "@telegraf/session/pg";
 import { inlineMenuArray, MAX_TRANSACTIONS_PER_MESSAGE } from "./constants.js";
-import { handleHistoryMenu } from "./history.js";
+import { handleHistoryMenu, showTransactions } from "./history.js";
 import {
   addNewWallet,
   checkWalletExists,
   sendUserWallets,
   deleteWallet,
   editWalletName,
-  getWalletAddressById,
-  getWalletNameById,
   getAllSubscriptions,
   removeSubscription,
+  getWalletAddressById,
+  getWalletNameById
 } from "./db.js";
 import {
   getUSDTBalance,
   formatTransactions,
-  fetchTransactions,
   fetchNewTransactions,
 } from "./tron.js";
 import {
@@ -95,35 +94,12 @@ bot.on("callback_query", async (ctx) => {
       try {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
-        const filter = ctx.session.filter;
-        const transactions = await fetchTransactions(walletAddress, filter);
-        if (transactions.length > MAX_TRANSACTIONS_PER_MESSAGE) {
-          for (
-            let i = 0;
-            i < transactions.length;
-            i += MAX_TRANSACTIONS_PER_MESSAGE
-          ) {
-            const transactionsChunk = transactions.slice(
-              i,
-              i + MAX_TRANSACTIONS_PER_MESSAGE
-            );
-            const formatMessage = formatTransactions(
-              transactionsChunk,
-              walletName,
-              walletAddress
-            );
-            await ctx.reply(formatMessage, { parse_mode: "Markdown" });
-          }
-        } else {
-          const formatMessage = formatTransactions(
-            transactions,
-            walletName,
-            walletAddress
-          );
-          await ctx.reply(formatMessage, { parse_mode: "Markdown" });
-        }
-        const textBalanceMessage = await getUSDTBalance(walletAddress);
-        await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
+        const filter = ctx.session.filter || 5;
+        ctx.session.pagination = {
+          offset: 0,
+          filterValue: filter,
+        };
+        await showTransactions(walletAddress, walletName, ctx, filter);
       } catch (error) {
         console.error(`Ошибка при показе всех транзакций: ${error.message}`);
       }
@@ -134,6 +110,9 @@ bot.on("callback_query", async (ctx) => {
       //inline keyboard menu
       case "wallets":
         handleWalletMenu(ctx);
+        ctx.session.awaitingWalletAddress = false;
+        ctx.session.awaitingWalletName = false;
+        ctx.session.awaitingNewName = false;
         break;
 
       case "history":
@@ -152,7 +131,15 @@ bot.on("callback_query", async (ctx) => {
 
       case "allWallets":
         sendUserWallets(ctx, "wallet");
+        ctx.session.awaitingWalletAddress = false;
+        ctx.session.awaitingWalletName = false;
+        ctx.session.awaitingNewName = false;
         break;
+
+      // case "show_more":
+      //   const walletAddress = ; 
+      //   await showTransactions(walletAddress, ctx);
+      //   break;
 
       case "return":
         handleStartMenu(ctx);

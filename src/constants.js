@@ -18,6 +18,10 @@ export const inlineHistoryArray = [
   [{ text: "20 шт", callback_data: "20" }],
 ];
 
+export const inlineTransArray = [
+  [{ text: "Да", callback_data: "show_more" }],
+];
+
 export const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
 export const MAX_TRANSACTIONS_PER_MESSAGE = 12;
