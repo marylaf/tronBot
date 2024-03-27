@@ -23,7 +23,6 @@ export const handleHistoryMenu = (ctx) => {
 export async function showTransactions(walletAddress, walletName, ctx) {
   const filter = ctx.session.filter || 5;
   const fingerprint = ctx.session.pagination?.fingerprint;
-  console.log(fingerprint, 'ГДЕ ПЕРЕДАЕТСЯ');
   const { transactions, nextFingerprint } = await fetchTransactions(walletAddress, filter, fingerprint);
 
   if (transactions.length <= 0) {

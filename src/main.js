@@ -94,9 +94,6 @@ bot.on("callback_query", async (ctx) => {
       try {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
-        ctx.session.pagination = {
-          offset: 0,
-        };
         await showTransactions(walletAddress, walletName, ctx);
       } catch (error) {
         console.error(`Ошибка при показе всех транзакций: ${error.message}`);
