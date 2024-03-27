@@ -66,7 +66,6 @@ export async function fetchTransactions(walletAddress, filterValue) {
       console.error(`Ошибка при получении транзакций: ${error}`);
     }
   }
-
   return allUsdtTransactions;
 }
 

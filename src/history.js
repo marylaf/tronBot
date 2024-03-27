@@ -3,7 +3,6 @@ import {
   MAX_TRANSACTIONS_PER_MESSAGE,
   inlineTransArray,
 } from "./constants.js";
-import { getWalletAddressById, getWalletNameById } from "./db.js";
 import {
   getUSDTBalance,
   formatTransactions,
@@ -23,15 +22,13 @@ export const handleHistoryMenu = (ctx) => {
 
 export async function showTransactions(walletAddress, walletName, ctx, filter) {
   // const { offset, filterValue } = ctx.session.pagination;
-  const transactions = await fetchTransactions(
-    walletAddress,
-    walletName,
-    filter
-  );
-  if (transactions.length < 0) {
+  const transactions = await fetchTransactions(walletAddress, filter);
+
+  if (transactions.length <= 0) {
     await ctx.reply("Больше транзакций нет.");
     return;
   }
+
   if (transactions.length > MAX_TRANSACTIONS_PER_MESSAGE) {
     for (
       let i = 0;
@@ -60,7 +57,7 @@ export async function showTransactions(walletAddress, walletName, ctx, filter) {
   const textBalanceMessage = await getUSDTBalance(walletAddress);
   await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
 
-  ctx.session.pagination.offset += transactions.length;
+  // ctx.session.pagination.offset += transactions.length;
   await ctx.reply("Показать еще?", {
     reply_markup: {
       inline_keyboard: inlineTransArray,
