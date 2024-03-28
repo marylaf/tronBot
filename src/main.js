@@ -94,7 +94,7 @@ bot.on("callback_query", async (ctx) => {
       try {
         const walletAddress = await getWalletAddressById(walletId);
         const walletName = await getWalletNameById(walletId);
-        await showTransactions(walletAddress, walletName, ctx);
+        await showTransactions(walletAddress, walletName, ctx, false);
       } catch (error) {
         console.error(`Ошибка при показе всех транзакций: ${error.message}`);
       }
@@ -135,7 +135,7 @@ bot.on("callback_query", async (ctx) => {
         const walletAddress = ctx.session.walletAddress;
         const walletName = ctx.session.walletName;
 
-        await showTransactions(walletAddress, walletName, ctx);
+        await showTransactions(walletAddress, walletName, ctx, true);
 
         break;
 

@@ -20,9 +20,9 @@ export const handleHistoryMenu = (ctx) => {
   ctx.reply(startTextMessage, startCaptchaMessage);
 };
 
-export async function showTransactions(walletAddress, walletName, ctx) {
+export async function showTransactions(walletAddress, walletName, ctx, useFingeprint) {
   const filter = ctx.session.filter || 5;
-  const fingerprint = ctx.session.pagination?.fingerprint;
+  const fingerprint = useFingeprint ? ctx.session.pagination?.fingerprint : undefined;
   const { transactions, nextFingerprint } = await fetchTransactions(walletAddress, filter, fingerprint);
 
   if (transactions.length <= 0) {
