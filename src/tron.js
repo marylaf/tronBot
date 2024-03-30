@@ -25,7 +25,7 @@ export async function getUSDTBalance(walletAddress) {
   }
 }
 
-export async function   fetchTransactions(
+export async function fetchTransactions(
   walletAddress,
   filterValue,
   fingerprint = null
@@ -34,7 +34,6 @@ export async function   fetchTransactions(
   const limit = filterValue;
   const allUsdtTransactions = [];
 
-  console.log("fetchTransactions", walletAddress, filterValue, fingerprint);
   while (allUsdtTransactions.length < filterValue) {
     const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20`;
     let params = { limit };
@@ -60,7 +59,17 @@ export async function   fetchTransactions(
 
       // Добавляем транзакции до достижения filterValue
       for (let transaction of usdtTransactions) {
-        allUsdtTransactions.push(transaction);
+        if (allUsdtTransactions.length < filterValue) {
+          allUsdtTransactions.push(transaction);
+          console.log(
+            "fetchTransactions",
+            allUsdtTransactions,
+            filterValue,
+            allUsdtTransactions.length
+          );
+        } else {
+          break;
+        }
       }
 
       // Обновляем fingerprint для следующего запроса
