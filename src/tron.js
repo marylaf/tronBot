@@ -61,12 +61,6 @@ export async function fetchTransactions(
       for (let transaction of usdtTransactions) {
         if (allUsdtTransactions.length < filterValue) {
           allUsdtTransactions.push(transaction);
-          console.log(
-            "fetchTransactions",
-            allUsdtTransactions,
-            filterValue,
-            allUsdtTransactions.length
-          );
         } else {
           break;
         }
