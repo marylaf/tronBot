@@ -259,6 +259,10 @@ export async function sendMessageToAllUsers() {
           await bot.telegram.sendMessage(subscription.chatId, message, {
             parse_mode: "Markdown",
           });
+          const textBalanceMessage = await getUSDTBalance(walletAddress);
+          await bot.telegram.sendMessage(subscription.chatId, textBalanceMessage, {
+            parse_mode: "Markdown",
+          });
         }
       }
     } catch (e) {
