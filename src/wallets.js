@@ -34,3 +34,22 @@ export function isValidWalletAddress(address) {
 
   return true;
 }
+
+export const handleWalletMenu = async (ctx) => {
+  const startTextMessage = `Что будем делать с кошельками?`;
+  const startCaptchaMessage = {
+    reply_markup: {
+      inline_keyboard: inlineWalletArray,
+    },
+  };
+
+  try {
+    await ctx.reply(startTextMessage, startCaptchaMessage);
+  } catch (error) {
+    console.error("Ошибка при отправке сообщения:", error.message);
+
+    await ctx.reply(
+      "Произошла ошибка при открытии меню кошельков. Пожалуйста, попробуйте снова."
+    );
+  }
+};
