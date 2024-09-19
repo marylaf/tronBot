@@ -153,78 +153,109 @@ bot.on("callback_query", async (ctx) => {
 });
 
 bot.on("message", async (ctx) => {
-  console.log("Получено сообщение: ", ctx.message);
-  const userId = ctx.update.message.from.id;
-  const username = ctx.update.message.from.username;
+  try {
+    console.log("Получено сообщение: ", ctx.message);
+    const userId = ctx.update.message.from.id;
+    const username = ctx.update.message.from.username;
 
-  if (ctx.message.text === "/start") {
-    return handleStartMenu(ctx);
-  }
-
-  if (ctx.session.awaitingWalletAddress) {
-    const walletAddress = extractWalletAddressFromMessage(
-      ctx.update.message.text
-    );
-
-    if (!isValidWalletAddress(walletAddress)) {
-      await ctx.reply("Адрес не подходит, попробуйте еще раз.");
+    // Проверка на текстовое сообщение
+    if (!ctx.message || !ctx.message.text) {
+      await ctx.reply("Пожалуйста, отправьте текстовое сообщение.");
       return;
     }
 
-    const isWalletExists = await checkWalletExists(
-      userId,
-      username,
-      walletAddress
-    );
+    // Обработка команды /start
+    if (ctx.message.text === "/start") {
+      return handleStartMenu(ctx);
+    }
 
-    if (isWalletExists) {
-      await ctx.reply(
-        "Этот адрес кошелька уже добавлен для данного пользователя."
+    // Обработка состояния, когда ожидается адрес кошелька
+    if (ctx.session.awaitingWalletAddress) {
+      const walletAddress = extractWalletAddressFromMessage(
+        ctx.update.message.text
       );
+
+      if (!walletAddress || !isValidWalletAddress(walletAddress)) {
+        await ctx.reply("Адрес не подходит, попробуйте еще раз.");
+        return;
+      }
+
+      const isWalletExists = await checkWalletExists(
+        userId,
+        username,
+        walletAddress
+      );
+      if (isWalletExists) {
+        await ctx.reply(
+          "Этот адрес кошелька уже добавлен для данного пользователя."
+        );
+        return;
+      }
+
+      const textBalanceMessage = await getUSDTBalance(walletAddress);
+      await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
+
+      ctx.session.walletAddress = walletAddress;
+      ctx.session.awaitingWalletAddress = false;
+      ctx.session.awaitingWalletName = true;
+      await ctx.reply("Как назвать этот кошелек?");
       return;
     }
 
-    const textBalanceMessage = await getUSDTBalance(walletAddress);
-    await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });
+    // Обработка состояния, когда ожидается имя для кошелька
+    if (ctx.session.awaitingWalletName) {
+      const walletName = ctx.update.message.text;
+      const walletAddress = ctx.session.walletAddress;
 
-    ctx.session.walletAddress = walletAddress;
-    ctx.session.awaitingWalletAddress = false;
-    ctx.session.awaitingWalletName = true;
-    await ctx.reply("Как назвать этот кошелек?");
-    return;
-  }
+      if (!walletAddress) {
+        await ctx.reply("Ошибка: не найден адрес кошелька в сессии.");
+        return;
+      }
 
-  if (ctx.session.awaitingWalletName) {
-    const walletName = ctx.update.message.text;
-    const walletAddress = ctx.session.walletAddress;
+      await addNewWallet(userId, username, walletAddress, walletName, ctx);
 
-    await addNewWallet(userId, username, walletAddress, walletName, ctx);
-
-    ctx.session.awaitingWalletName = false;
-    delete ctx.session.walletAddress;
-    return;
-  }
-
-  if (ctx.session.awaitingNewName) {
-    const newName = ctx.update.message.text;
-    const walletId = ctx.session.walletIdForEdit;
-    try {
-      await editWalletName(walletId, newName);
-      await ctx.reply(`Имя кошелька успешно изменено на: ${newName}`);
-    } catch (error) {
-      console.log(`Ошибка при редактировании имени кошелька: ${error.message}`);
-      await ctx.reply(
-        "Произошла ошибка при попытке изменить имя кошелька. Пожалуйста, попробуйте еще раз."
-      );
+      ctx.session.awaitingWalletName = false;
+      delete ctx.session.walletAddress;
+      return;
     }
-    ctx.session.awaitingNewName = false;
-    delete ctx.session.walletIdForEdit;
-    return;
-  }
 
-  await ctx.reply(
-    "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
-  );
+    // Обработка состояния, когда ожидается новое имя для кошелька
+    if (ctx.session.awaitingNewName) {
+      const newName = ctx.update.message.text;
+      const walletId = ctx.session.walletIdForEdit;
+
+      if (!walletId) {
+        await ctx.reply("Ошибка: не найден ID кошелька для редактирования.");
+        return;
+      }
+
+      try {
+        await editWalletName(walletId, newName);
+        await ctx.reply(`Имя кошелька успешно изменено на: ${newName}`);
+      } catch (error) {
+        console.error(
+          `Ошибка при редактировании имени кошелька: ${error.message}`
+        );
+        await ctx.reply(
+          "Произошла ошибка при попытке изменить имя кошелька. Пожалуйста, попробуйте снова."
+        );
+      }
+
+      ctx.session.awaitingNewName = false;
+      delete ctx.session.walletIdForEdit;
+      return;
+    }
+
+    // Обработка сообщений, не подходящих под условия
+    await ctx.reply(
+      "Нужно выбрать команду из меню. Я не отвечаю на сообщения в чате 🦾🤖"
+    );
+  } catch (error) {
+    console.error("Произошла ошибка при обработке сообщения:", error.message);
+    await ctx.reply(
+      "Произошла ошибка при обработке вашего сообщения. Пожалуйста, попробуйте снова."
+    );
+  }
 });
 
 // funсtion for opening start menu
