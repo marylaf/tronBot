@@ -41,20 +41,13 @@ const bot = new Telegraf(process.env.TELEGRAM_TOKEN, {
 
 bot.use(session({ store, defaultSession: () => ({ count: 0 }) }));
 
-// funсtion for opening start menu
-const handleStartMenu = (ctx) => {
-  const startTextMessage = `Вы можете воспользоваться следующими командами:`;
-  const startCaptchaMessage = {
-    reply_markup: {
-      inline_keyboard: inlineMenuArray,
-    },
-  };
+bot.start((ctx) => {
+  console.log("Команда /start была вызвана");
+  handleStartMenu(ctx);
+});
 
-  ctx.reply(startTextMessage, startCaptchaMessage);
-};
-
-bot.start((ctx) => handleStartMenu(ctx));
 bot.command("menu", (ctx) => {
+  console.log("Команда /menu была вызвана");
   ctx.session.awaitingWalletAddress = false;
   ctx.session.awaitingWalletName = false;
   ctx.session.awaitingNewName = false;
@@ -160,8 +153,13 @@ bot.on("callback_query", async (ctx) => {
 });
 
 bot.on("message", async (ctx) => {
+  console.log("Получено сообщение: ", ctx.message);
   const userId = ctx.update.message.from.id;
   const username = ctx.update.message.from.username;
+
+  if (ctx.message.text === "/start") {
+    return handleStartMenu(ctx);
+  }
 
   if (ctx.session.awaitingWalletAddress) {
     const walletAddress = extractWalletAddressFromMessage(
@@ -229,6 +227,18 @@ bot.on("message", async (ctx) => {
   );
 });
 
+// funсtion for opening start menu
+const handleStartMenu = (ctx) => {
+  const startTextMessage = `Вы можете воспользоваться следующими командами:`;
+  const startCaptchaMessage = {
+    reply_markup: {
+      inline_keyboard: inlineMenuArray,
+    },
+  };
+
+  ctx.reply(startTextMessage, startCaptchaMessage);
+};
+
 export async function sendMessageToAllUsers() {
   const subscriptions = await getAllSubscriptions();
   for (const subscription of subscriptions) {
@@ -260,9 +270,13 @@ export async function sendMessageToAllUsers() {
             parse_mode: "Markdown",
           });
           const textBalanceMessage = await getUSDTBalance(walletAddress);
-          await bot.telegram.sendMessage(subscription.chatId, textBalanceMessage, {
-            parse_mode: "Markdown",
-          });
+          await bot.telegram.sendMessage(
+            subscription.chatId,
+            textBalanceMessage,
+            {
+              parse_mode: "Markdown",
+            }
+          );
         }
       }
     } catch (e) {
