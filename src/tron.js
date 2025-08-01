@@ -1,12 +1,26 @@
+import axios from "axios";
 import TronWeb from "tronweb";
 import { usdtContractAddress } from "./constants.js";
-import axios from "axios";
 import { pool } from "./db.js";
+
+const tronHeaders = process.env.TRONGRID_API_KEY
+  ? { "TRON-PRO-API-KEY": process.env.TRONGRID_API_KEY }
+  : undefined;
 
 const tronWeb = new TronWeb({
   fullNode: "https://api.trongrid.io",
   solidityNode: "https://api.trongrid.io",
   eventServer: "https://api.trongrid.io",
+  headers: tronHeaders,
+});
+
+export const tron = axios.create({
+  baseURL: "https://api.trongrid.io",
+  timeout: 15000,
+  headers: {
+    accept: "application/json",
+    ...(tronHeaders || {}),
+  },
 });
 
 tronWeb.setAddress("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t");
@@ -31,45 +45,36 @@ export async function fetchTransactions(
   fingerprint = null
 ) {
   filterValue = parseInt(filterValue, 10);
-  const limit = filterValue;
+  const limit = filterValue; 
   const allUsdtTransactions = [];
 
   while (allUsdtTransactions.length < filterValue) {
-    const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20`;
-    let params = { limit };
-
-    // Добавляем fingerprint в параметры запроса, если он уже известен
-    if (fingerprint) {
-      params.fingerprint = fingerprint;
-    }
+    const url = `/v1/accounts/${walletAddress}/transactions/trc20`;
+    const params = { limit, ...(fingerprint ? { fingerprint } : {}) };
 
     try {
-      const response = await axios.get(url, {
-        params,
-        headers: { accept: "application/json" },
-      });
-      const transactions = response.data.data || [];
-      const usdtTransactions = transactions.filter(
-        (transaction) =>
-          transaction.token_info.symbol === "USDT" &&
-          parseInt(transaction.value, 10) /
-            Math.pow(10, transaction.token_info.decimals) >=
-            1
-      );
+      const { data } = await tron.get(url, { params });
+      const transactions = data?.data || [];
 
-      // Добавляем транзакции до достижения filterValue
-      for (let transaction of usdtTransactions) {
+      const usdtTransactions = transactions.filter((tx) => {
+        const token = tx?.token_info;
+        if (!token) return false;
+        const isUSDT = token.symbol === "USDT";
+        const decimals = Number(token.decimals ?? 6);
+        const amount = Number(tx?.value ?? 0) / Math.pow(10, decimals);
+        return isUSDT && amount >= 1;
+      });
+
+      for (const tx of usdtTransactions) {
         if (allUsdtTransactions.length < filterValue) {
-          allUsdtTransactions.push(transaction);
+          allUsdtTransactions.push(tx);
         } else {
           break;
         }
       }
 
-      // Обновляем fingerprint для следующего запроса
-      fingerprint = response.data.meta?.fingerprint;
+      fingerprint = data?.meta?.fingerprint;
 
-      // Проверяем условие выхода: если получено транзакций меньше, чем limit, предполагаем, что это последняя страница
       if (
         transactions.length < limit ||
         allUsdtTransactions.length >= filterValue
@@ -77,12 +82,14 @@ export async function fetchTransactions(
         break;
       }
     } catch (error) {
-      console.error(`Ошибка при получении транзакций: ${error}`);
-      break; // Прерываем цикл в случае ошибки
+      console.error(
+        "Ошибка при получении транзакций:",
+        error?.message || error
+      );
+      break;
     }
   }
 
-  // Возвращаем накопленные транзакции и последний fingerprint для возможной последующей пагинации
   return { transactions: allUsdtTransactions, nextFingerprint: fingerprint };
 }
 
@@ -90,43 +97,64 @@ export async function fetchNewTransactions(
   walletAddress,
   lastKnownTransactionId
 ) {
-  const limit = 50;
+  const pageLimit = 50;
+  const maxPages = 5;
   const newUsdtTransactions = [];
 
-  const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20`;
+  let fingerprint = undefined;
+  let pages = 0;
+  let stop = false;
 
   try {
-    const response = await axios.get(url, {
-      params: { limit },
-      headers: { accept: "application/json" },
-    });
-    const transactions = response.data.data || [];
+    while (!stop && pages < maxPages) {
+      const { data } = await tron.get(
+        `/v1/accounts/${walletAddress}/transactions/trc20`,
+        {
+          params: { limit: pageLimit, ...(fingerprint ? { fingerprint } : {}) },
+        }
+      );
 
-    for (let transaction of transactions) {
-      if (transaction.transaction_id === lastKnownTransactionId) {
-        break;
-      } else if (
-        transaction.token_info.symbol === "USDT" &&
-        parseInt(transaction.value, 10) /
-          Math.pow(10, transaction.token_info.decimals) >=
-          1
-      ) {
-        newUsdtTransactions.push(transaction);
+      const transactions = data?.data || [];
+      if (!transactions.length) break;
+
+      for (const tx of transactions) {
+        if (tx?.transaction_id === lastKnownTransactionId) {
+          stop = true; // дошли до последнего известного
+          break;
+        }
+
+        const token = tx?.token_info;
+        if (!token) continue;
+        const isUSDT = token.symbol === "USDT";
+        const decimals = Number(token.decimals ?? 6);
+        const amount = Number(tx?.value ?? 0) / Math.pow(10, decimals);
+
+        if (isUSDT && amount >= 1) {
+          newUsdtTransactions.push(tx);
+        }
       }
+
+      if (stop) break;
+
+      fingerprint = data?.meta?.fingerprint;
+      if (!fingerprint || transactions.length < pageLimit) break;
+
+      pages++;
     }
 
+    // если нашли новые — обновим last_known_transaction_id на самый свежий
     if (newUsdtTransactions.length > 0) {
       const latestTransactionId = newUsdtTransactions[0].transaction_id;
+
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
-
-        const updateQuery = `
-          UPDATE wallets
-          SET last_known_transaction_id = $1
-          WHERE wallet_address = $2
-        `;
-        await client.query(updateQuery, [latestTransactionId, walletAddress]);
+        await client.query(
+          `UPDATE wallets
+           SET last_known_transaction_id = $1
+           WHERE wallet_address = $2`,
+          [latestTransactionId, walletAddress]
+        );
         await client.query("COMMIT");
       } catch (error) {
         console.error("Error updating last known transaction ID:", error);
@@ -136,7 +164,10 @@ export async function fetchNewTransactions(
       }
     }
   } catch (error) {
-    console.error(`Ошибка при получении новых транзакций: ${error}`);
+    console.error(
+      "Ошибка при получении новых транзакций:",
+      error?.message || error
+    );
   }
 
   return newUsdtTransactions.reverse();

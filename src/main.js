@@ -273,8 +273,8 @@ const handleStartMenu = (ctx) => {
 export async function sendMessageToAllUsers() {
   const subscriptions = await getAllSubscriptions();
   for (const subscription of subscriptions) {
+  console.log("DO TRANS");
     try {
-      console.log("DO TRANS");
       const walletAddress = subscription.walletAddress;
       const lastKnownTransactionId = subscription.lastKnownTransactionId;
       const newTransactions = await fetchNewTransactions(
