@@ -1,7 +1,7 @@
-import pkg from "pg";
-import { config } from "dotenv";
-import { getUSDTBalance } from "./tron.js";
-import axios from "axios";
+import axios from 'axios';
+import { config } from 'dotenv';
+import pkg from 'pg';
+import { getUSDTBalance } from './tron.js';
 
 config();
 
@@ -15,11 +15,11 @@ export const pool = new Pool({
   port: process.env.POSTGRESQL_PORT,
 });
 
-pool.query("SELECT NOW()", (err, res) => {
+pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error("PostgreSQL connection error:", err);
+    console.error('PostgreSQL connection error:', err);
   } else {
-    console.log("PostgreSQL connected successfully", res.rows);
+    console.log('PostgreSQL connected successfully', res.rows);
   }
 });
 
@@ -32,40 +32,40 @@ export async function addNewWallet(
 ) {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await client.query('BEGIN');
 
     const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=20`;
     const response = await axios.get(url, {
-      headers: { accept: "application/json" },
+      headers: { accept: 'application/json' },
     });
     const transactions = response.data.data || [];
 
     const usdtTransactions = transactions.filter(
-      (transaction) => transaction.token_info.symbol === "USDT"
+      (transaction) => transaction.token_info.symbol === 'USDT'
     );
 
-    let lastKnownTransactionId = "0"; // Значение по умолчанию, если транзакции не найдены
+    let lastKnownTransactionId = '0'; // Значение по умолчанию, если транзакции не найдены
     if (usdtTransactions.length > 0) {
       lastKnownTransactionId = usdtTransactions[0].transaction_id;
     }
 
     const insertQuery =
-      "INSERT INTO wallets(user_id, username, wallet_address, wallet_name, last_known_transaction_id) VALUES($1, $2, $3, $4, $5) RETURNING *";
+      'INSERT INTO wallets(user_id, username, wallet_address, wallet_name, last_known_transaction_id) VALUES($1, $2, $3, $4, $5) RETURNING *';
     const insertRes = await client.query(insertQuery, [
-      userId,
+      Number(userId),
       username,
       walletAddress,
       walletName,
       lastKnownTransactionId,
     ]);
-    await client.query("COMMIT");
+    await client.query('COMMIT');
 
-    await ctx.reply("Адрес кошелька успешно добавлен :)");
+    await ctx.reply('Адрес кошелька успешно добавлен :)');
 
     return insertRes.rows[0];
   } catch (error) {
-    console.log("Error checking wallet adding:", error);
-    await client.query("ROLLBACK");
+    console.log('Error checking wallet adding:', error);
+    await client.query('ROLLBACK');
   } finally {
     client.release();
   }
@@ -75,7 +75,7 @@ export async function checkWalletExists(userId, username, walletAddress) {
   const client = await pool.connect();
   try {
     const checkQuery =
-      "SELECT * FROM wallets WHERE user_id = $1 AND username = $2 AND wallet_address = $3";
+      'SELECT * FROM wallets WHERE user_id = $1 AND username = $2 AND wallet_address = $3';
     const checkRes = await client.query(checkQuery, [
       userId,
       username,
@@ -83,7 +83,7 @@ export async function checkWalletExists(userId, username, walletAddress) {
     ]);
     return checkRes.rows.length > 0;
   } catch (error) {
-    console.log("Error checking wallet existence:", error);
+    console.log('Error checking wallet existence:', error);
     return false;
   } finally {
     client.release();
@@ -93,11 +93,11 @@ export async function checkWalletExists(userId, username, walletAddress) {
 export async function getUserWallets(userId) {
   const client = await pool.connect();
   try {
-    const query = "SELECT * FROM wallets WHERE user_id = $1";
+    const query = 'SELECT * FROM wallets WHERE user_id = $1';
     const { rows } = await client.query(query, [userId]);
     return rows;
   } catch (error) {
-    console.error("Error retrieving user wallets:", error);
+    console.error('Error retrieving user wallets:', error);
     return [];
   } finally {
     client.release();
@@ -109,10 +109,10 @@ export async function sendUserWallets(ctx, context) {
   const wallets = await getUserWallets(userId);
 
   if (wallets.length === 0) {
-    await ctx.reply("На данный момент в системе нет кошельков.");
+    await ctx.reply('На данный момент в системе нет кошельков.');
   } else {
     const textAllWalletsMessage =
-      "На данный момент в системе есть следующие кошельки:";
+      'На данный момент в системе есть следующие кошельки:';
     await ctx.reply(textAllWalletsMessage);
 
     for (const wallet of wallets) {
@@ -124,20 +124,20 @@ export async function sendUserWallets(ctx, context) {
 
       let buttons;
 
-      if (context === "transaction") {
+      if (context === 'transaction') {
         buttons = {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Показать", callback_data: `show_${wallet.id}` }],
+              [{ text: 'Показать', callback_data: `show_${wallet.id}` }],
             ],
           },
         };
-      } else if (context === "wallet") {
+      } else if (context === 'wallet') {
         buttons = {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "Редактировать", callback_data: `edit_${wallet.id}` }],
-              [{ text: "Удалить", callback_data: `delete_${wallet.id}` }],
+              [{ text: 'Редактировать', callback_data: `edit_${wallet.id}` }],
+              [{ text: 'Удалить', callback_data: `delete_${wallet.id}` }],
             ],
           },
         };
@@ -146,7 +146,7 @@ export async function sendUserWallets(ctx, context) {
       await ctx.reply(messageText, {
         reply_markup: buttons.reply_markup,
         disable_web_page_preview: true,
-        parse_mode: "Markdown",
+        parse_mode: 'Markdown',
       });
     }
   }
@@ -155,22 +155,22 @@ export async function sendUserWallets(ctx, context) {
 export async function deleteWallet(walletId) {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    const selectQuery = "SELECT wallet_address FROM wallets WHERE id = $1";
+    await client.query('BEGIN');
+    const selectQuery = 'SELECT wallet_address FROM wallets WHERE id = $1';
     const selectRes = await client.query(selectQuery, [walletId]);
     if (selectRes.rows.length > 0) {
       const walletAddress = selectRes.rows[0].wallet_address;
-      const deleteQuery = "DELETE FROM wallets WHERE id = $1";
+      const deleteQuery = 'DELETE FROM wallets WHERE id = $1';
       await client.query(deleteQuery, [walletId]);
-      await client.query("COMMIT");
+      await client.query('COMMIT');
       return walletAddress;
     } else {
       console.log(`Кошелек с номером ${walletAddress} не найден.`);
       return null;
     }
   } catch (error) {
-    console.log("Ошибка при удалении кошелька:", error);
-    await client.query("ROLLBACK");
+    console.log('Ошибка при удалении кошелька:', error);
+    await client.query('ROLLBACK');
   } finally {
     client.release();
   }
@@ -179,12 +179,12 @@ export async function deleteWallet(walletId) {
 export async function editWalletName(walletId, newName) {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    const updateQuery = "UPDATE wallets SET wallet_name = $1 WHERE id = $2";
+    await client.query('BEGIN');
+    const updateQuery = 'UPDATE wallets SET wallet_name = $1 WHERE id = $2';
     await client.query(updateQuery, [newName, walletId]);
-    await client.query("COMMIT");
+    await client.query('COMMIT');
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
@@ -194,17 +194,17 @@ export async function editWalletName(walletId, newName) {
 export async function getWalletAddressById(walletId) {
   const client = await pool.connect();
   try {
-    const query = "SELECT wallet_address FROM wallets WHERE id = $1";
+    const query = 'SELECT wallet_address FROM wallets WHERE id = $1';
     const { rows } = await client.query(query, [walletId]);
     if (rows.length > 0) {
       const walletAddress = rows[0].wallet_address;
       return walletAddress;
     } else {
-      console.log("Кошелек не найден");
+      console.log('Кошелек не найден');
       return null;
     }
   } catch (error) {
-    console.error("Ошибка при извлечении адреса кошелька:", error);
+    console.error('Ошибка при извлечении адреса кошелька:', error);
     return null;
   } finally {
     client.release();
@@ -214,17 +214,17 @@ export async function getWalletAddressById(walletId) {
 export async function getWalletNameById(walletId) {
   const client = await pool.connect();
   try {
-    const query = "SELECT wallet_name FROM wallets WHERE id = $1";
+    const query = 'SELECT wallet_name FROM wallets WHERE id = $1';
     const { rows } = await client.query(query, [walletId]);
     if (rows.length > 0) {
       const walletName = rows[0].wallet_name;
       return walletName;
     } else {
-      console.log("Имя не найдено");
+      console.log('Имя не найдено');
       return null;
     }
   } catch (error) {
-    console.error("Ошибка при извлечении имени кошелька:", error);
+    console.error('Ошибка при извлечении имени кошелька:', error);
     return null;
   } finally {
     client.release();
@@ -236,7 +236,7 @@ export async function getAllSubscriptions() {
 
   try {
     const queryText =
-      "SELECT user_id, wallet_address, wallet_name, last_known_transaction_id FROM wallets";
+      'SELECT user_id, wallet_address, wallet_name, last_known_transaction_id FROM wallets';
     const res = await client.query(queryText);
     return res.rows.map((row) => ({
       chatId: row.user_id,
@@ -245,7 +245,7 @@ export async function getAllSubscriptions() {
       lastKnownTransactionId: row.last_known_transaction_id,
     }));
   } catch (error) {
-    console.error("Ошибка при получении подписок:", error);
+    console.error('Ошибка при получении подписок:', error);
     throw error;
   } finally {
     client.release();
@@ -255,10 +255,8 @@ export async function getAllSubscriptions() {
 export async function removeSubscription(chatId) {
   const client = await pool.connect();
   try {
-    await client.query('DELETE FROM wallets WHERE "user_id" = $1', [
-      chatId,
-    ]);
+    await client.query('DELETE FROM wallets WHERE "user_id" = $1', [chatId]);
   } catch (error) {
-    console.log("Error removing subscription:", error);
+    console.log('Error removing subscription:', error);
   }
 }
