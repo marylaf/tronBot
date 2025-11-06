@@ -30,27 +30,51 @@ export async function addNewWallet(
   walletName,
   ctx
 ) {
+  console.log(
+    `🔹 [addNewWallet] Start for userId=${userId}, wallet=${walletAddress}, name=${walletName}`
+  );
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    console.log(`🟢 [${userId}] BEGIN transaction`);
 
     const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=20`;
+    console.log(`🌐 [${userId}] Fetching transactions from: ${url}`);
+
     const response = await axios.get(url, {
       headers: { accept: 'application/json' },
     });
     const transactions = response.data.data || [];
-
-    const usdtTransactions = transactions.filter(
-      (transaction) => transaction.token_info.symbol === 'USDT'
+    console.log(
+      `📦 [${userId}] Total transactions fetched: ${transactions.length}`
     );
 
-    let lastKnownTransactionId = '0'; // Значение по умолчанию, если транзакции не найдены
+    const usdtTransactions = transactions.filter(
+      (tx) => tx.token_info?.symbol === 'USDT'
+    );
+    console.log(
+      `💰 [${userId}] USDT transactions found: ${usdtTransactions.length}`
+    );
+
+    let lastKnownTransactionId = '0';
     if (usdtTransactions.length > 0) {
       lastKnownTransactionId = usdtTransactions[0].transaction_id;
+      console.log(
+        `🔑 [${userId}] Last known transaction ID: ${lastKnownTransactionId}`
+      );
+    } else {
+      console.log(
+        `⚠️ [${userId}] No USDT transactions found, using default ID 0`
+      );
     }
 
-    const insertQuery =
-      'INSERT INTO wallets(user_id, username, wallet_address, wallet_name, last_known_transaction_id) VALUES($1, $2, $3, $4, $5) RETURNING *';
+    const insertQuery = `
+      INSERT INTO wallets(user_id, username, wallet_address, wallet_name, last_known_transaction_id)
+      VALUES($1, $2, $3, $4, $5)
+      RETURNING id, wallet_address, wallet_name, created_at;
+    `;
+
     const insertRes = await client.query(insertQuery, [
       Number(userId),
       username,
@@ -58,16 +82,26 @@ export async function addNewWallet(
       walletName,
       lastKnownTransactionId,
     ]);
-    await client.query('COMMIT');
 
-    await ctx.reply('Адрес кошелька успешно добавлен :)');
+    await client.query('COMMIT');
+    console.log(
+      `✅ [${userId}] Wallet inserted successfully — ID: ${insertRes.rows[0].id}`
+    );
+
+    await ctx.reply('✅ Адрес кошелька успешно добавлен :)');
 
     return insertRes.rows[0];
   } catch (error) {
-    console.log('Error checking wallet adding:', error);
-    await client.query('ROLLBACK');
+    console.error(`❌ [${userId}] Error adding wallet:`, error);
+    try {
+      await client.query('ROLLBACK');
+      console.log(`🔁 [${userId}] Transaction rolled back`);
+    } catch (rollbackErr) {
+      console.error(`💥 [${userId}] Rollback failed:`, rollbackErr);
+    }
   } finally {
     client.release();
+    console.log(`🔚 [${userId}] Client connection released`);
   }
 }
 
