@@ -69,14 +69,15 @@ export async function addNewWallet(
       );
     }
 
+    // ⚙️ Убрали created_at, чтобы не было ошибки
     const insertQuery = `
       INSERT INTO wallets(user_id, username, wallet_address, wallet_name, last_known_transaction_id)
       VALUES($1, $2, $3, $4, $5)
-      RETURNING id, wallet_address, wallet_name, created_at;
+      RETURNING id, wallet_address, wallet_name;
     `;
 
     const insertRes = await client.query(insertQuery, [
-      userId,
+      String(userId), // ⚠️ Telegram ID — лучше как строка (bigint → JS-safe)
       username,
       walletAddress,
       walletName,
