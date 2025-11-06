@@ -76,7 +76,7 @@ export async function addNewWallet(
     `;
 
     const insertRes = await client.query(insertQuery, [
-      Number(userId),
+      userId,
       username,
       walletAddress,
       walletName,
