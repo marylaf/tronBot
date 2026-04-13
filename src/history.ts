@@ -1,15 +1,15 @@
+import type { Context } from "telegraf";
 import {
   inlineHistoryArray,
   MAX_TRANSACTIONS_PER_MESSAGE,
   inlineTransArray,
 } from "./constants.js";
-import {
-  getUSDTBalance,
-  formatTransactions,
-  fetchTransactions,
-} from "./tron.js";
+import { getUSDTBalance, formatTransactions, fetchTransactions } from "./tron.js";
+import type { BotSession } from "./types/session.js";
 
-export const handleHistoryMenu = (ctx) => {
+type SessionContext = Context & { session: BotSession };
+
+export function handleHistoryMenu(ctx: SessionContext): void {
   const startTextMessage = `Сколько последних транзакций показывать?`;
   const startCaptchaMessage = {
     reply_markup: {
@@ -17,13 +17,29 @@ export const handleHistoryMenu = (ctx) => {
     },
   };
 
-  ctx.reply(startTextMessage, startCaptchaMessage);
-};
+  void ctx.reply(startTextMessage, startCaptchaMessage);
+}
 
-export async function showTransactions(walletAddress, walletName, ctx, useFingeprint) {
-  const filter = ctx.session.filter || 5;
-  const fingerprint = useFingeprint ? ctx.session.pagination?.fingerprint : undefined;
-  const { transactions, nextFingerprint } = await fetchTransactions(walletAddress, filter, fingerprint);
+export async function showTransactions(
+  walletAddress: string | null,
+  walletName: string | null,
+  ctx: SessionContext,
+  useFingerprint: boolean
+): Promise<void> {
+  if (!walletAddress || !walletName) {
+    await ctx.reply("Не удалось определить кошелёк.");
+    return;
+  }
+
+  const filter = ctx.session.filter ?? 5;
+  const fingerprint = useFingerprint
+    ? ctx.session.pagination?.fingerprint
+    : undefined;
+  const { transactions, nextFingerprint } = await fetchTransactions(
+    walletAddress,
+    filter,
+    fingerprint
+  );
 
   if (transactions.length <= 0) {
     await ctx.reply("Больше транзакций нет.");
@@ -57,15 +73,14 @@ export async function showTransactions(walletAddress, walletName, ctx, useFingep
   }
 
   ctx.session.pagination = { fingerprint: nextFingerprint };
-
   ctx.session.walletAddress = walletAddress;
   ctx.session.walletName = walletName;
 
-    await ctx.reply("Показать еще?", {
-      reply_markup: {
-        inline_keyboard: inlineTransArray,
-      },
-    });
+  await ctx.reply("Показать еще?", {
+    reply_markup: {
+      inline_keyboard: inlineTransArray,
+    },
+  });
 
   const textBalanceMessage = await getUSDTBalance(walletAddress);
   await ctx.reply(textBalanceMessage, { parse_mode: "Markdown" });

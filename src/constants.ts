@@ -18,9 +18,7 @@ export const inlineHistoryArray = [
   [{ text: "20 шт", callback_data: "20" }],
 ];
 
-export const inlineTransArray = [
-  [{ text: "Да", callback_data: "more" }],
-];
+export const inlineTransArray = [[{ text: "Да", callback_data: "more" }]];
 
 export const usdtContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 
