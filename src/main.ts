@@ -358,7 +358,7 @@ async function bootstrap(): Promise<void> {
   void sendMessageToAllUsers();
   setInterval(() => {
     void sendMessageToAllUsers();
-  }, 30_000);
+  }, 60_000);
 
   await bot.launch();
 }
