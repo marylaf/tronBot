@@ -1,8 +1,8 @@
-import axios from "axios";
 import type { Context } from "telegraf";
 import { AppDataSource } from "./data-source.js";
 import { Wallet } from "./entity/Wallet.js";
-import { getUSDTBalance } from "./tron.js";
+import { withTronGridRetry } from "./trongrid-keys.js";
+import { getUSDTBalance, tron } from "./tron.js";
 
 export type WalletRow = Wallet;
 
@@ -26,15 +26,17 @@ export async function addNewWallet(
     return await AppDataSource.manager.transaction(async (manager) => {
       console.log(`🟢 [${userId}] BEGIN transaction`);
 
-      const url = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=20`;
-      console.log(`🌐 [${userId}] Fetching transactions from: ${url}`);
+      const url = `/v1/accounts/${walletAddress}/transactions/trc20`;
+      console.log(`🌐 [${userId}] Fetching transactions from TronGrid: ${url}?limit=20`);
 
-      const response = await axios.get<{
-        data?: Array<{
-          transaction_id?: string;
-          token_info?: { symbol?: string };
-        }>;
-      }>(url, { headers: { accept: "application/json" } });
+      const response = await withTronGridRetry(() =>
+        tron.get<{
+          data?: Array<{
+            transaction_id?: string;
+            token_info?: { symbol?: string };
+          }>;
+        }>(url, { params: { limit: 20 } })
+      );
       const transactions = response.data.data ?? [];
       console.log(
         `📦 [${userId}] Total transactions fetched: ${transactions.length}`

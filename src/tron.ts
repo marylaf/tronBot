@@ -3,16 +3,39 @@ import TronWeb from "tronweb";
 import { usdtContractAddress } from "./constants.js";
 import { AppDataSource } from "./data-source.js";
 import { Wallet } from "./entity/Wallet.js";
+import {
+  getTronGridHeaders,
+  registerTronGridHeadersSync,
+  withTronGridRetry,
+} from "./trongrid-keys.js";
 
-const tronHeaders: Record<string, string> | undefined = process.env.TRONGRID_API_KEY
-  ? { "TRON-PRO-API-KEY": process.env.TRONGRID_API_KEY }
-  : undefined;
+function applyTronGridHeaders(): void {
+  const headers = getTronGridHeaders();
+  const apiKey = headers?.["TRON-PRO-API-KEY"];
+
+  if (apiKey) {
+    tron.defaults.headers.common["TRON-PRO-API-KEY"] = apiKey;
+  } else {
+    delete tron.defaults.headers.common["TRON-PRO-API-KEY"];
+  }
+
+  for (const node of [tronWeb.fullNode, tronWeb.solidityNode, tronWeb.eventServer]) {
+    if (!node.headers) {
+      node.headers = {};
+    }
+    if (apiKey) {
+      node.headers["TRON-PRO-API-KEY"] = apiKey;
+    } else {
+      delete node.headers["TRON-PRO-API-KEY"];
+    }
+  }
+}
 
 const tronWeb = new TronWeb({
   fullNode: "https://api.trongrid.io",
   solidityNode: "https://api.trongrid.io",
   eventServer: "https://api.trongrid.io",
-  headers: tronHeaders,
+  headers: getTronGridHeaders(),
 });
 
 export const tron: AxiosInstance = axios.create({
@@ -20,16 +43,19 @@ export const tron: AxiosInstance = axios.create({
   timeout: 15000,
   headers: {
     accept: "application/json",
-    ...(tronHeaders ?? {}),
+    ...(getTronGridHeaders() ?? {}),
   },
 });
+
+registerTronGridHeadersSync(applyTronGridHeaders);
+applyTronGridHeaders();
 
 tronWeb.setAddress("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t");
 
 export async function getUSDTBalance(walletAddress: string): Promise<string> {
   try {
-    const contract = await tronWeb.contract().at(usdtContractAddress);
-    const balance = await contract.balanceOf(walletAddress).call();
+    const contract = await withTronGridRetry(() => tronWeb.contract().at(usdtContractAddress));
+    const balance = await withTronGridRetry(() => contract.balanceOf(walletAddress).call());
     const balanceInUSDT = (
       tronWeb.toBigNumber(balance as string | number).toNumber() / 1_000_000
     ).toFixed();
@@ -71,8 +97,10 @@ export async function fetchTransactions(
     };
 
     try {
-      const { data } = await tron.get<TronTrc20ListResponse>(url, { params });
-      const transactions = data?.data ?? [];
+      const page = await withTronGridRetry(() =>
+        tron.get<TronTrc20ListResponse>(url, { params }).then((r) => r.data)
+      );
+      const transactions = page?.data ?? [];
 
       const usdtTransactions = transactions.filter((tx) => {
         const token = tx?.token_info;
@@ -91,7 +119,7 @@ export async function fetchTransactions(
         }
       }
 
-      fp = data?.meta?.fingerprint;
+      fp = page?.meta?.fingerprint;
 
       if (transactions.length < limit || allUsdtTransactions.length >= targetCount) {
         break;
@@ -122,17 +150,18 @@ export async function fetchNewTransactions(
 
   try {
     while (!stop && pages < maxPages) {
-      const { data } = await tron.get<TronTrc20ListResponse>(
-        `/v1/accounts/${walletAddress}/transactions/trc20`,
-        {
-          params: {
-            limit: pageLimit,
-            ...(fingerprint ? { fingerprint } : {}),
-          },
-        }
+      const data = await withTronGridRetry(() =>
+        tron
+          .get<TronTrc20ListResponse>(`/v1/accounts/${walletAddress}/transactions/trc20`, {
+            params: {
+              limit: pageLimit,
+              ...(fingerprint ? { fingerprint } : {}),
+            },
+          })
+          .then((r) => r.data)
       );
 
-      const transactions = data?.data ?? [];
+      const transactions = data.data ?? [];
       if (!transactions.length) break;
 
       for (const tx of transactions) {
@@ -154,7 +183,7 @@ export async function fetchNewTransactions(
 
       if (stop) break;
 
-      fingerprint = data?.meta?.fingerprint;
+      fingerprint = data.meta?.fingerprint;
       if (!fingerprint || transactions.length < pageLimit) break;
 
       pages += 1;
